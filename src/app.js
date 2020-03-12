@@ -1,5 +1,5 @@
-// Bring in our dependencies
-const app = require('express')();
+const express = require('express')
+const app = express()
 const routes = require('./routes');
 
 //  Connect all our routes to our application
