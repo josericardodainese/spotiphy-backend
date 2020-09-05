@@ -3,7 +3,12 @@
         "start": "nodemon src/app.js"
     },
     "dependencies": {
+        "axios": "^0.19.2",
+        "cors": "^2.8.5",
         "express": "^4.17.1",
+        "form-data": "^3.0.0",
+        "nodemon": "^2.0.4",
+        "request": "^2.88.2",
         "spotify-web-api-js": "^1.2.0",
         "spotify-web-api-node": "^4.0.0"
     }
