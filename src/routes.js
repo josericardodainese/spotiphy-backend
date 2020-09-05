@@ -4,6 +4,8 @@ const querystring = require('querystring');
 const stateKey = 'spotify_auth_state';
 const request = require('request');
 const axios = require('axios');
+const { response } = require('express');
+const e = require('express');
 
 
 
@@ -223,15 +225,17 @@ routes.get('/current_playing/lyric', (req, res) => {
             const artist = data.body.item.artists[0].name
             const song = data.body.item.name
 
-            const lyric = await getLyric(artist, song);
-
-            if (lyric.status === 200) {
-                data.lyric = lyric.data.lyrics;
-                res.send(`<pre>${data.lyric}</pre>`);
-            } else {
-                data.lyric = "Letra Não Encontrada";
+            getLyric(artist, song).then(lyric => {
+                console.log(lyric);
+                if (lyric.status === 200) {
+                    data.lyric = lyric.data.lyrics;
+                    res.send(`<pre>${data.lyric}</pre>`);
+                }
+            }).catch(e => {
                 res.send(`<pre>Letra Não Encontrada</pre>`);
-            }
+            });
+
+
         }, function (err) {
             if (err.statusCode === 401 && err.name === 'WebapiError' && err.message === 'Unauthorized') {
                 res.redirect('/login');
