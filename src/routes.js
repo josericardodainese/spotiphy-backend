@@ -4,9 +4,8 @@ const querystring = require('querystring');
 const stateKey = 'spotify_auth_state';
 const request = require('request');
 const axios = require('axios');
-const { response } = require('express');
-const e = require('express');
-
+const url = require('url');
+const { nextTick } = require('process');
 
 
 var generateRandomString = function (length) {
@@ -33,9 +32,34 @@ var spotifyApi = new SpotifyWebApi({
     clientSecret: configuration.clientSecrets
 });
 
+function handleError(req, res, err) {
+    if (err.statusCode === 401 && err.name === 'WebapiError' && err.message === 'Unauthorized') {
+        res.redirect(`/login/${req.path.slice(1, req.path.length)}`);
+    } else {
+        res.send({ "ERROR": err });
+    }
+}
+
 // Get an access token and 'save' it using a setter
 routes.get('/login', (req, res) => {
     var state = generateRandomString(16);
+    // var state = req
+    res.cookie(stateKey, state);
+
+    res.redirect(configuration.urlAuthorize +
+        querystring.stringify({
+            response_type: 'code',
+            client_id: configuration.clientId,
+            scope: configuration.scope,
+            redirect_uri: configuration.redirectUri,
+            state: state
+        }));
+})
+
+routes.get('/login/*', (req, res) => {
+
+    const state = req.params[0]
+
     res.cookie(stateKey, state);
 
     res.redirect(configuration.urlAuthorize +
@@ -52,8 +76,8 @@ routes.get('/callback', (req, res) => {
 
     var code = req.query.code || null;
     var state = req.query.state || null;
-    var storedState = req.headers.cookie ? req.headers.cookie.split('=')[1] : null;
 
+    var storedState = req.cookies['spotify_auth_state'] ? req.cookies['spotify_auth_state'] : null;
 
     if (state === null || state !== storedState) {
         res.send({
@@ -62,6 +86,7 @@ routes.get('/callback', (req, res) => {
             "storedState": storedState
         });
     } else {
+
         res.clearCookie(stateKey);
 
         var authOptions = {
@@ -82,13 +107,17 @@ routes.get('/callback', (req, res) => {
 
             if (!error && response.statusCode === 200) {
 
-                var access_token = body.access_token,
-                    refresh_token = body.refresh_token;
+                const access_token = body.access_token;
+                const refresh_token = body.refresh_token;
 
                 spotifyApi.setAccessToken(access_token);
                 spotifyApi.setRefreshToken(refresh_token);
 
-                res.redirect('/me');
+                if (storedState.length == 16) {
+                    res.redirect(`/me`);
+                } else {
+                    res.redirect(`/${storedState}`);
+                }
 
             } else {
                 res.redirect('/#' +
@@ -127,7 +156,7 @@ routes.get('/getArtist/:id', (req, res) => {
             res.send(data.body)
         },
         function (err) {
-            console.error(err);
+            handleError(req, res, err)
         }
     );
 })
@@ -138,7 +167,7 @@ routes.get('/me', (req, res) => {
             res.send(data.body);
         },
         function (err) {
-            res.send({ "ERROR": err });
+            handleError(req, res, err)
         }
     );
 })
@@ -149,11 +178,7 @@ routes.get('/next', (req, res) => {
             res.send(data.body);
         },
         function (err) {
-            if (err.statusCode === 401 && err.name === 'WebapiError' && err.message === 'Unauthorized') {
-                res.redirect('/refresh_token#next=' + req.url);
-            } else {
-                res.send({ "ERROR": err });
-            }
+            handleError(req, res, err)
         }
     );
 })
@@ -163,11 +188,7 @@ routes.get('/current_playing_track', (req, res) => {
     spotifyApi.getMyCurrentPlayingTrack().then((data) => {
         res.send(data.item);
     }, (err) => {
-        if (err.statusCode === 401 && err.name === 'WebapiError' && err.message === 'Unauthorized') {
-            res.redirect('/logins');
-        } else {
-            res.send({ "ERROR": err });
-        } s
+        handleError(req, res, err)
     });
 
 });
@@ -177,11 +198,7 @@ routes.get('/test', (req, res) => {
     spotifyApi.getMyCurrentPlayingTrack().then((data) => {
         res.send(data);
     }, (err) => {
-        if (err.statusCode === 401 && err.name === 'WebapiError' && err.message === 'Unauthorized') {
-            res.redirect('/login');
-        } else {
-            res.send({ "ERROR": err });
-        } s
+        handleError(req, res, err)
     });
 
 });
@@ -191,13 +208,7 @@ routes.get('/get_device_id', (req, res) => {
     spotifyApi.getMyDevices().then((data) => {
         res.send(data.body.devices);
     }, (err) => {
-        if (err.statusCode === 401 && err.name === 'WebapiError' && err.message === 'Unauthorized') {
-            res.redirect('/refresh-token');
-        } else if (err.statusCode === 400 && err.name === 'WebapiError' && err.message === 'Bad Request') {
-            res.redirect('/refresh-token');
-        } else {
-            res.send({ "ERROR": err });
-        }
+        handleError(req, res, err)
     });
 })
 
@@ -208,11 +219,7 @@ routes.get('/current_playing', (req, res) => {
             // Output items
             res.send(data.body);
         }, function (err) {
-            if (err.statusCode === 401 && err.name === 'WebapiError' && err.message === 'Unauthorized') {
-                res.redirect('/login');
-            } else {
-                res.send({ "ERROR": err });
-            }
+            handleError(req, res, err)
         });
 
 });
@@ -220,28 +227,24 @@ routes.get('/current_playing', (req, res) => {
 routes.get('/current_playing/lyric', (req, res) => {
     spotifyApi.getMyCurrentPlaybackState({})
         .then(async function (data) {
-            // Output items
 
-            const artist = data.body.item.artists[0].name
-            const song = data.body.item.name
-
-            getLyric(artist, song).then(lyric => {
-                console.log(lyric);
-                if (lyric.status === 200) {
-                    data.lyric = lyric.data.lyrics;
-                    res.send(`<pre>${data.lyric}</pre>`);
-                }
-            }).catch(e => {
-                res.send(`<pre>Letra Não Encontrada</pre>`);
-            });
-
-
-        }, function (err) {
-            if (err.statusCode === 401 && err.name === 'WebapiError' && err.message === 'Unauthorized') {
-                res.redirect('/login');
+            if (data.statusCode == 204) {
+                res.send("Nada Sendo Reproduzido")
             } else {
-                res.send({ "ERROR": err });
+                const artist = data.body.item.artists[0].name
+                const song = data.body.item.name
+
+                getLyric(artist, song).then(lyric => {
+                    if (lyric.status === 200) {
+                        data.lyric = lyric.data.lyrics;
+                        res.send(`<pre>${data.lyric}</pre>`);
+                    }
+                }).catch(e => {
+                    res.send(`<pre>Letra Não Encontrada</pre>`);
+                });
             }
+        }, function (err) {
+            handleError(req, res, err)
         });
 
 });
@@ -264,5 +267,6 @@ routes.get('/refresh-token', (req, res) => {
         }
     );
 });
+
 
 module.exports = routes;
