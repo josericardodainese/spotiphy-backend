@@ -5,7 +5,8 @@ const stateKey = 'spotify_auth_state';
 const request = require('request');
 const axios = require('axios');
 const url = require('url');
-const { nextTick } = require('process');
+
+const getLyrics = require('genius-lyrics-api/lib/getLyrics');
 
 
 var generateRandomString = function (length) {
@@ -24,7 +25,11 @@ var configuration = {
     redirectUri: 'http://localhost:3000/callback',
     urlAuthorize: 'https://accounts.spotify.com/authorize?',
     scope: 'user-read-private user-read-email user-read-currently-playing user-read-currently-playing user-read-playback-state app-remote-control user-modify-playback-state',
-    url_token: 'https://accounts.spotify.com/api/token'
+    url_token: 'https://accounts.spotify.com/api/token',
+    genius_id: 'IofgWxwVp7aqy8EDMk2XylIVu07mVnmnw9NVk6d7wUS9XZvzaaFiKI1IKnEUinDC',
+    genius_secret: 'wsoF0o-kwgY8oIS1cNwldI_gdxU_kIH0J-N33FiNChPR9MGixP8gs6T5TXGOlycCTqb19LTiOemzSlVzgO-jlg',
+    genius_token: "4msCH8V69zMpjjRfK7OzUqZ1eJc5OKZB-1mKkwIiPMqGPHtshTxFRq5oIIRgkii-"
+
 }
 
 var spotifyApi = new SpotifyWebApi({
@@ -214,11 +219,14 @@ routes.get('/get_device_id', (req, res) => {
 
 
 routes.get('/current_playing', (req, res) => {
-    spotifyApi.getMyCurrentPlaybackState({})
-        .then(function (data) {
+    spotifyApi.getMyCurrentPlayingTrack({})
+        .then(async function (data) {
             // Output items
-            res.send(data.body);
-        }, function (err) {
+            const trackId = data.body.item.id;
+            // res.send(trackId);
+            const trackDetails = await getTrackDetails(trackId)
+            res.send(trackDetails);
+        }, function (err) { 
             handleError(req, res, err)
         });
 
@@ -234,10 +242,18 @@ routes.get('/current_playing/lyric', (req, res) => {
                 const artist = data.body.item.artists[0].name
                 const song = data.body.item.name
 
+                const options = {
+                    apiKey: configuration.genius_token,
+                    title: song,
+                    artist: artist,
+                    optimizeQuery: true
+                };
+            
+                
+    
                 getLyric(artist, song).then(lyric => {
-                    if (lyric.status === 200) {
-                        data.lyric = lyric.data.lyrics;
-                        res.send(`<pre>${data.lyric}</pre>`);
+                    if (lyric.length > 0) {
+                        res.send(`<pre>${lyric}</pre>`);
                     }
                 }).catch(e => {
                     res.send(`<pre>Letra Não Encontrada</pre>`);
@@ -250,7 +266,20 @@ routes.get('/current_playing/lyric', (req, res) => {
 });
 
 async function getLyric(artist, song) {
-    return await axios.get(`https://api.lyrics.ovh/v1/${artist}/${song}`);
+
+
+    const options = {
+        apiKey: configuration.genius_token,
+        title: song,
+        artist: artist,
+        optimizeQuery: false
+    };
+
+    return await getLyrics(options);
+}
+
+async function getTrackDetails(trackId) {
+    return await spotifyApi.getTrack(trackId);
 }
 
 routes.get('/refresh-token', (req, res) => {
