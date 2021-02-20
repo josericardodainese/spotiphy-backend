@@ -5,9 +5,7 @@
     "scripts": {
         "start": "tsc && node dist/app.js",
         "build": "tsc",
-        "start:dev": "NODE_ENV=development && npm run build && nodemon --config nodemon.json dist/app.js",
-        "build:dev": "tsc --watch --preserveWatchOutput",
-        "dev": "concurrently \"npm:build:dev\" \"npm:start:dev\""
+        "start:dev": "NODE_ENV=development && npm run build && nodemon --config nodemon.json dist/app.js"
     },
     "dependencies": {
         "@babel/preset-typescript": "^7.12.17",

@@ -3,7 +3,7 @@ import SpotifyWebApi from 'spotify-web-api-node';
 import querystring from 'querystring';
 import request from 'request';
 
-const getLyrics = require('genius-lyrics-api/lib/getLyrics');
+import getLyrics from 'genius-lyrics-api/lib/getLyrics';
 
 import { authConfig } from './config/AuthConfig';
 import { ErrorModel } from './models/errors/ErrorModel';
