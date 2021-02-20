@@ -1,43 +1,24 @@
-const routes = require('express').Router();
-const SpotifyWebApi = require('spotify-web-api-node');
-const querystring = require('querystring');
-const stateKey = 'spotify_auth_state';
-const request = require('request');
-const axios = require('axios');
-const url = require('url');
+import { Router, Request, Response } from 'express';
+import SpotifyWebApi from 'spotify-web-api-node';
+import querystring from 'querystring';
+import request from 'request';
 
 const getLyrics = require('genius-lyrics-api/lib/getLyrics');
 
+import { authConfig } from './config/AuthConfig';
+import { ErrorModel } from './models/errors/ErrorModel';
+import { StringUtils } from './utils/StringUtils';
 
-var generateRandomString = function (length) {
-    var text = '';
-    var possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 
-    for (var i = 0; i < length; i++) {
-        text += possible.charAt(Math.floor(Math.random() * possible.length));
-    }
-    return text;
-};
+const stateKey = 'spotify_auth_state';
+const stringUtils = new StringUtils();
 
-var configuration = {
-    clientId: '4647c27e51d54410b922f969fb042217',
-    clientSecret: '1de47a4e505a4760bd1576353d927525',
-    redirectUri: 'http://localhost:3000/callback',
-    urlAuthorize: 'https://accounts.spotify.com/authorize?',
-    scope: 'user-read-private user-read-email user-read-currently-playing user-read-currently-playing user-read-playback-state app-remote-control user-modify-playback-state',
-    url_token: 'https://accounts.spotify.com/api/token',
-    genius_id: 'IofgWxwVp7aqy8EDMk2XylIVu07mVnmnw9NVk6d7wUS9XZvzaaFiKI1IKnEUinDC',
-    genius_secret: 'wsoF0o-kwgY8oIS1cNwldI_gdxU_kIH0J-N33FiNChPR9MGixP8gs6T5TXGOlycCTqb19LTiOemzSlVzgO-jlg',
-    genius_token: "4msCH8V69zMpjjRfK7OzUqZ1eJc5OKZB-1mKkwIiPMqGPHtshTxFRq5oIIRgkii-"
-
-}
-
-var spotifyApi = new SpotifyWebApi({
-    clientId: configuration.clientId,
-    clientSecret: configuration.clientSecrets
+const spotifyApi = new SpotifyWebApi({
+    clientId: authConfig.spotifyClientId,
+    clientSecret: authConfig.spotifyClientSecret
 });
 
-function handleError(req, res, err) {
+const handleError = (req: Request, res: Response, err: ErrorModel) => {
     if (err.statusCode === 401 && err.name === 'WebapiError' && err.message === 'Unauthorized') {
         res.redirect(`/login/${req.path.slice(1, req.path.length)}`);
     } else {
@@ -45,18 +26,20 @@ function handleError(req, res, err) {
     }
 }
 
+const routes = Router();
+
 // Get an access token and 'save' it using a setter
-routes.get('/login', (req, res) => {
-    var state = generateRandomString(16);
-    // var state = req
+routes.get('/login', (_req: Request, res: Response) => {
+    const state = stringUtils.generateRandomString(16);
+    
     res.cookie(stateKey, state);
 
-    res.redirect(configuration.urlAuthorize +
+    res.redirect(authConfig.spotifyUrlAuthorize +
         querystring.stringify({
             response_type: 'code',
-            client_id: configuration.clientId,
-            scope: configuration.scope,
-            redirect_uri: configuration.redirectUri,
+            client_id: authConfig.spotifyClientId,
+            scope: authConfig.spotifyScope,
+            redirect_uri: authConfig.spotifyRedirectUri,
             state: state
         }));
 })
@@ -67,12 +50,12 @@ routes.get('/login/*', (req, res) => {
 
     res.cookie(stateKey, state);
 
-    res.redirect(configuration.urlAuthorize +
+    res.redirect(authConfig.spotifyUrlAuthorize +
         querystring.stringify({
             response_type: 'code',
-            client_id: configuration.clientId,
-            scope: configuration.scope,
-            redirect_uri: configuration.redirectUri,
+            client_id: authConfig.spotifyClientId,
+            scope: authConfig.spotifyScope,
+            redirect_uri: authConfig.spotifyRedirectUri,
             state: state
         }));
 })
@@ -94,21 +77,21 @@ routes.get('/callback', (req, res) => {
 
         res.clearCookie(stateKey);
 
-        var authOptions = {
-            url: configuration.url_token,
+        const authOptions = {
+            url: authConfig.spotifyUrltoken || "",
             form: {
                 code: code,
-                redirect_uri: configuration.redirectUri,
+                redirect_uri: authConfig.spotifyRedirectUri,
                 grant_type: 'authorization_code'
             },
             headers: {
-                'Authorization': 'Basic ' + (new Buffer(configuration.clientId + ':' + configuration.clientSecret).toString('base64')),
+                'Authorization': 'Basic ' + (new Buffer(authConfig.spotifyClientId + ':' + authConfig.spotifyClientSecret).toString('base64')),
                 'Content-Type': 'application/x-www-form-urlencoded'
             },
             json: true
         };
 
-        request.post(authOptions, function (error, response, body) {
+        request.post(authOptions, (error, response, body) => {
 
             if (!error && response.statusCode === 200) {
 
@@ -138,8 +121,8 @@ routes.get('/refresh_token', (req, res) => {
 
     var refresh_token = req.query.refresh_token;
     var authOptions = {
-        url: configuration.url_token,
-        headers: { 'Authorization': 'Basic ' + (new Buffer(configuration.clientId + ':' + configuration.clientSecret).toString('base64')) },
+        url: authConfig.spotifyUrltoken || "",
+        headers: { 'Authorization': 'Basic ' + (new Buffer(authConfig.spotifyClientId + ':' + authConfig.spotifyClientSecret).toString('base64')) },
         form: {
             grant_type: 'refresh_token',
             refresh_token: refresh_token
@@ -167,7 +150,7 @@ routes.get('/getArtist/:id', (req, res) => {
 })
 
 routes.get('/me', (req, res) => {
-    spotifyApi.getMe(req.params.id).then(
+    spotifyApi.getMe().then(
         function (data) {
             res.send(data.body);
         },
@@ -191,7 +174,7 @@ routes.get('/next', (req, res) => {
 routes.get('/current_playing_track', (req, res) => {
 
     spotifyApi.getMyCurrentPlayingTrack().then((data) => {
-        res.send(data.item);
+        res.send(data.body.item);
     }, (err) => {
         handleError(req, res, err)
     });
@@ -222,11 +205,11 @@ routes.get('/current_playing', (req, res) => {
     spotifyApi.getMyCurrentPlayingTrack({})
         .then(async function (data) {
             // Output items
-            const trackId = data.body.item.id;
+            const trackId = data.body.item?.id;
             // res.send(trackId);
             const trackDetails = await getTrackDetails(trackId)
             res.send(trackDetails);
-        }, function (err) { 
+        }, function (err) {
             handleError(req, res, err)
         });
 
@@ -239,18 +222,18 @@ routes.get('/current_playing/lyric', (req, res) => {
             if (data.statusCode == 204) {
                 res.send("Nada Sendo Reproduzido")
             } else {
-                const artist = data.body.item.artists[0].name
-                const song = data.body.item.name
+                const artist = data.body.item?.artists[0].name
+                const song = data.body.item?.name
 
                 const options = {
-                    apiKey: configuration.genius_token,
+                    apiKey: authConfig.geniusToken,
                     title: song,
                     artist: artist,
                     optimizeQuery: true
                 };
-            
-                
-    
+
+
+
                 getLyric(artist, song).then(lyric => {
                     if (lyric.length > 0) {
                         res.send(`<pre>${lyric}</pre>`);
@@ -265,11 +248,11 @@ routes.get('/current_playing/lyric', (req, res) => {
 
 });
 
-async function getLyric(artist, song) {
+async function getLyric(artist: string | undefined, song: string | undefined) {
 
 
     const options = {
-        apiKey: configuration.genius_token,
+        apiKey: authConfig.geniusToken,
         title: song,
         artist: artist,
         optimizeQuery: false
@@ -278,7 +261,7 @@ async function getLyric(artist, song) {
     return await getLyrics(options);
 }
 
-async function getTrackDetails(trackId) {
+async function getTrackDetails(trackId: string) {
     return await spotifyApi.getTrack(trackId);
 }
 
@@ -297,5 +280,4 @@ routes.get('/refresh-token', (req, res) => {
     );
 });
 
-
-module.exports = routes;
+export default routes;
