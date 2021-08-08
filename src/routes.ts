@@ -249,8 +249,6 @@ routes.get('/current_playing/lyric', (req, res) => {
 });
 
 async function getLyric(artist: string | undefined, song: string | undefined) {
-
-
     const options = {
         apiKey: authConfig.geniusToken,
         title: song,
