@@ -9,7 +9,7 @@
     },
     "dependencies": {
         "@babel/preset-typescript": "^7.12.17",
-        "axios": "^0.21.1",
+        "axios": "^0.21.2",
         "concurrently": "^6.0.0",
         "cookie-parser": "^1.4.5",
         "cors": "^2.8.5",
